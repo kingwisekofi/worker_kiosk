@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SitePass — Worker Entrance Kiosk</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom subtle scrollbar & touch optimizations */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        /* Smooth transitions for cards and modals */
+        .fade-in {
+            animation: fadeIn 0.2s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white">
+
+    <!-- Top Navigation & Live Clock Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 sm:px-8 py-4 flex flex-col gap-3 sticky top-0 z-30">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                    <i data-lucide="shield-check" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-none">SitePass Kiosk</h1>
+                    <p class="text-xs sm:text-sm text-slate-400 font-medium mt-1" id="live-date">Loading date...</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <!-- Live Clock Badge -->
+                <div class="hidden md:flex items-center gap-2 bg-slate-800/80 border border-slate-700/80 px-4 py-2.5 rounded-xl text-slate-200 font-mono text-base font-semibold">
+                    <i data-lucide="clock" class="w-4 h-4 text-emerald-400"></i>
+                    <span id="live-clock">00:00:00</span>
+                </div>
+
+                <!-- Site & Work Location Settings Button -->
+                <button onclick="openLocationModal()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-white font-semibold px-4 py-3 rounded-xl transition cursor-pointer" title="Configure Site & Work Location">
+                    <i data-lucide="map-pin" class="w-5 h-5 text-amber-400"></i>
+                    <span>Locations</span>
+                </button>
+
+                <!-- Activity Log Button -->
+                <button onclick="openLogModal()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-white font-semibold px-4 py-3 rounded-xl transition cursor-pointer">
+                    <i data-lucide="history" class="w-5 h-5 text-sky-400"></i>
+                    <span>Activity Log</span>
+                    <span id="log-badge" class="bg-sky-500/20 text-sky-300 text-xs font-bold px-2 py-0.5 rounded-full border border-sky-500/30">0</span>
+                </button>
+
+                <!-- Export CSV Button -->
+                <button onclick="exportCSV()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-white font-semibold px-4 py-3 rounded-xl transition cursor-pointer" title="Download CSV Report">
+                    <i data-lucide="download" class="w-5 h-5 text-emerald-400"></i>
+                    <span class="hidden sm:inline">Export CSV</span>
+                </button>
+
+                <!-- Send to WhatsApp Button -->
+                <button onclick="initiateWhatsAppShare()" class="flex items-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 active:scale-95 border border-[#25D366]/40 text-[#4ADE80] hover:text-white font-bold px-4 py-3 rounded-xl transition cursor-pointer" title="Send Exported File & Report to WhatsApp">
+                    <i data-lucide="message-circle" class="w-5 h-5 text-[#25D366]"></i>
+                    <span class="hidden sm:inline">WhatsApp</span>
+                </button>
+
+                <!-- Reset / Clear Button -->
+                <button onclick="openResetModal()" class="flex items-center justify-center bg-slate-800 hover:bg-rose-950/70 hover:border-rose-700/60 active:scale-95 border border-slate-700 text-slate-300 hover:text-rose-400 p-3 rounded-xl transition cursor-pointer" title="Reset / Clear All Records">
+                    <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Active Site Location & Work Location Banner -->
+        <div onclick="openLocationModal()" class="bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-amber-500/40 rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer transition group">
+            <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs sm:text-sm">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="building-2" class="w-4 h-4 text-amber-400 shrink-0"></i>
+                    <span class="text-slate-400 font-medium">Site Location:</span>
+                    <span id="header-site-location" class="font-bold text-white break-words">Not Set</span>
+                </div>
+                <span class="hidden sm:inline text-slate-700">|</span>
+                <div class="flex items-center gap-2">
+                    <i data-lucide="briefcase" class="w-4 h-4 text-sky-400 shrink-0"></i>
+                    <span class="text-slate-400 font-medium">Work Location:</span>
+                    <span id="header-work-location" class="font-bold text-white break-words">Not Set</span>
+                </div>
+            </div>
+            <span class="text-xs font-semibold text-amber-400 group-hover:text-amber-300 flex items-center gap-1 shrink-0">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                <span>Edit Locations</span>
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Kiosk Workspace -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
+
+        <!-- Hero Section: Live Occupancy Counter + Quick Check-In Form -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            
+            <!-- Prominent Live Occupancy Counter Card -->
+            <div class="lg:col-span-5 bg-gradient-to-br from-slate-900 to-slate-900/90 border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl shadow-emerald-950/20 relative overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <span class="inline-flex items-center gap-2 text-emerald-400 font-bold uppercase tracking-wider text-xs sm:text-sm bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Live On-Site Count
+                    </span>
+                    <i data-lucide="users" class="w-7 h-7 text-emerald-400/70"></i>
+                </div>
+
+                <div class="my-4 sm:my-6 flex items-baseline gap-4">
+                    <span id="occupancy-count" class="text-7xl sm:text-8xl font-black tracking-tighter text-white leading-none">0</span>
+                    <span id="occupancy-label" class="text-xl sm:text-2xl font-semibold text-slate-400">workers inside</span>
+                </div>
+
+                <div class="pt-4 border-t border-slate-800 flex items-center justify-between text-xs sm:text-sm text-slate-400">
+                    <span>Auto-saved locally on device</span>
+                    <div class="flex items-center gap-3">
+                        <span id="active-radios-summary" class="font-semibold text-violet-300 flex items-center gap-1">
+                            <i data-lucide="radio" class="w-3.5 h-3.5 text-violet-400"></i>
+                            <span>0 radios out</span>
+                        </span>
+                        <span class="text-slate-700">•</span>
+                        <span id="today-entries-summary" class="font-semibold text-slate-300">0 entries today</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- High-Contrast Quick Check-In Card -->
+            <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-xl">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
+                        <i data-lucide="log-in" class="w-6 h-6 text-emerald-400"></i>
+                        Worker Entrance Check-In
+                    </h2>
+                    <p class="text-slate-400 text-sm sm:text-base mt-1">Enter full name, vendor, badge type (<strong class="text-slate-200">BB / YB / VB</strong>), and optional radio.</p>
+                </div>
+
+                <form id="checkin-form" onsubmit="handleCheckIn(event)" class="mt-6 flex flex-col gap-3.5">
+                    <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <div class="relative flex-1">
+                            <input 
+                                type="text" 
+                                id="worker-name-input" 
+                                placeholder="Enter worker full name..." 
+                                autocomplete="off"
+                                autocapitalize="words"
+                                spellcheck="false"
+                                class="w-full h-16 sm:h-18 bg-slate-950 border-2 border-slate-700 focus:border-emerald-500 rounded-2xl px-5 text-xl sm:text-2xl font-semibold text-white placeholder-slate-500 outline-none transition"
+                            >
+                            <button 
+                                type="button" 
+                                id="clear-input-btn"
+                                onclick="clearNameInput()"
+                                class="hidden absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800"
+                                aria-label="Clear input"
+                            >
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        <button 
+                            type="submit" 
+                            class="h-16 sm:h-18 px-8 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-extrabold text-xl rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2.5 transition cursor-pointer shrink-0"
+                        >
+                            <i data-lucide="user-plus" class="w-6 h-6 stroke-[2.5]"></i>
+                            <span>Check In</span>
+                        </button>
+                    </div>
+
+                    <!-- Vendor Name, Optional ID No., & Badge Type (BB, YB, VB) Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        <div class="sm:col-span-4 relative">
+                            <i data-lucide="building" class="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                            <input 
+                                type="text" 
+                                id="vendor-name-input" 
+                                list="vendor-suggestions-list"
+                                placeholder="Vendor / Company..." 
+                                autocomplete="off"
+                                autocapitalize="words"
+                                class="w-full h-13 bg-slate-950 border-2 border-slate-700 focus:border-sky-500 rounded-2xl pl-11 pr-4 py-3 text-sm sm:text-base font-semibold text-white placeholder-slate-500 outline-none transition"
+                            >
+                            <datalist id="vendor-suggestions-list"></datalist>
+                        </div>
+
+                        <div class="sm:col-span-3 relative">
+                            <i data-lucide="id-card" class="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                            <input 
+                                type="text" 
+                                id="worker-id-input" 
+                                placeholder="ID No. (Optional)" 
+                                autocomplete="off"
+                                autocapitalize="characters"
+                                class="w-full h-13 bg-slate-950 border-2 border-slate-700 focus:border-sky-500 rounded-2xl pl-11 pr-3 py-3 text-sm sm:text-base font-semibold text-white placeholder-slate-500 outline-none transition"
+                            >
+                        </div>
+
+                        <div class="sm:col-span-5 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Badge Type">
+                            <button 
+                                type="button" 
+                                id="badge-btn-BB"
+                                onclick="selectBadgeType('BB')"
+                                title="Blue Badge (BB)"
+                                class="h-13 py-2 px-2 rounded-2xl border-2 border-sky-500 bg-sky-500/20 text-sky-200 font-extrabold text-xs sm:text-sm flex flex-col items-center justify-center leading-tight transition cursor-pointer"
+                            >
+                                <span class="text-sm sm:text-base font-black text-sky-300">BB</span>
+                                <span class="text-[10px] font-semibold opacity-90">Blue Badge</span>
+                            </button>
+                            <button 
+                                type="button" 
+                                id="badge-btn-YB"
+                                onclick="selectBadgeType('YB')"
+                                title="Yellow Badge (YB)"
+                                class="h-13 py-2 px-2 rounded-2xl border-2 border-slate-800 bg-slate-950 text-slate-400 hover:border-amber-500/50 hover:text-amber-200 font-extrabold text-xs sm:text-sm flex flex-col items-center justify-center leading-tight transition cursor-pointer"
+                            >
+                                <span class="text-sm sm:text-base font-black">YB</span>
+                                <span class="text-[10px] font-semibold opacity-90">Yellow Badge</span>
+                            </button>
+                            <button 
+                                type="button" 
+                                id="badge-btn-VB"
+                                onclick="selectBadgeType('VB')"
+                                title="Visitor Badge (VB)"
+                                class="h-13 py-2 px-2 rounded-2xl border-2 border-slate-800 bg-slate-950 text-slate-400 hover:border-purple-500/50 hover:text-purple-200 font-extrabold text-xs sm:text-sm flex flex-col items-center justify-center leading-tight transition cursor-pointer"
+                            >
+                                <span class="text-sm sm:text-base font-black">VB</span>
+                                <span class="text-[10px] font-semibold opacity-90">Visitor Badge</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Radio Assignment Toggle & Radio Number Input -->
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div class="flex items-center flex-wrap gap-2.5">
+                            <label for="radio-assigned-checkbox" class="inline-flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-violet-500/50 cursor-pointer select-none transition">
+                                <input 
+                                    type="checkbox" 
+                                    id="radio-assigned-checkbox" 
+                                    onchange="toggleCheckInRadioInput()"
+                                    class="w-5 h-5 rounded accent-violet-500 cursor-pointer"
+                                >
+                                <i data-lucide="radio" class="w-5 h-5 text-violet-400"></i>
+                                <span class="text-sm sm:text-base font-bold text-slate-200">Radio Assigned</span>
+                            </label>
+
+                            <div id="radio-number-input-wrapper" class="hidden items-center">
+                                <input 
+                                    type="text" 
+                                    id="radio-number-input" 
+                                    placeholder="Radio # (e.g. R-04)" 
+                                    autocomplete="off"
+                                    class="h-11 w-44 sm:w-48 bg-slate-950 border-2 border-violet-500/60 focus:border-violet-400 rounded-2xl px-3.5 text-sm sm:text-base font-bold text-violet-200 placeholder-slate-500 outline-none transition"
+                                >
+                            </div>
+                        </div>
+                        <span class="text-xs text-slate-500">Tap Radio button on active cards to edit #</span>
+                    </div>
+                </form>
+
+                <!-- Quick Recent Names Suggestions (One-tap re-entry for returning workers) -->
+                <div id="recent-workers-bar" class="mt-5 pt-4 border-t border-slate-800/80 hidden">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 mr-1">Quick Re-Entry:</span>
+                        <div id="recent-workers-list" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Currently Inside Workers Section -->
+        <section class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 flex-1 flex flex-col">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
+                        <i data-lucide="hard-hat" class="w-6 h-6 text-amber-400"></i>
+                        Currently On-Site
+                    </h2>
+                    <p class="text-sm text-slate-400 mt-0.5">Tap <strong class="text-slate-200">Check Out</strong> next to a worker's name when leaving.</p>
+                </div>
+
+                <!-- Search Filter for Active Workers -->
+                <div class="relative w-full sm:w-72">
+                    <i data-lucide="search" class="w-5 h-5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                    <input 
+                        type="text" 
+                        id="search-active-input" 
+                        oninput="renderActiveWorkers()"
+                        placeholder="Filter active workers..." 
+                        class="w-full h-12 bg-slate-950 border border-slate-700 focus:border-sky-500 rounded-xl pl-11 pr-4 text-base text-white placeholder-slate-500 outline-none transition"
+                    >
+                </div>
+            </div>
+
+            <!-- Active Workers Grid -->
+            <div id="active-workers-grid" class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Populated dynamically via JS -->
+            </div>
+
+            <!-- Empty State when 0 workers inside -->
+            <div id="empty-active-state" class="my-auto py-14 text-center flex flex-col items-center justify-center">
+                <div class="w-16 h-16 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-500 mb-4">
+                    <i data-lucide="door-open" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-300">Site is Currently Empty</h3>
+                <p class="text-slate-500 text-sm max-w-sm mt-1">No workers are checked in right now. Use the check-in box above to record an arrival.</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast Notification Banner (Non-blocking feedback) -->
+    <div id="toast-container" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2 w-full max-w-md px-4"></div>
+
+    <!-- Modal 1: Full Activity Log -->
+    <div id="log-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-40 hidden items-center justify-center p-4 sm:p-6">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-3xl max-h-[88vh] flex flex-col shadow-2xl fade-in">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-800 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                        <i data-lucide="clipboard-list" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white">Entry & Exit Activity Log</h3>
+                        <p class="text-xs sm:text-sm text-slate-400">Complete timestamped history stored on this device</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button onclick="exportCSV()" class="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-sm transition cursor-pointer">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Export CSV</span>
+                    </button>
+                    <button onclick="initiateWhatsAppShare()" class="flex items-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-slate-950 font-bold px-4 py-2.5 rounded-xl text-sm transition cursor-pointer">
+                        <i data-lucide="message-circle" class="w-4 h-4"></i>
+                        <span>Send to WhatsApp</span>
+                    </button>
+                    <button onclick="closeLogModal()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer" aria-label="Close modal">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body (Scrollable Log Table) -->
+            <div class="p-4 sm:p-6 overflow-y-auto flex-1">
+                <div id="log-empty-state" class="py-12 text-center text-slate-500 hidden">
+                    <i data-lucide="file-clock" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                    <p class="font-semibold text-slate-400">No activity recorded yet</p>
+                    <p class="text-sm mt-1">Check-ins and check-outs will appear here automatically.</p>
+                </div>
+
+                <div id="log-table-wrapper" class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-400">
+                                <th class="pb-3 pl-2">Worker Name & ID</th>
+                                <th class="pb-3">Vendor & Badge</th>
+                                <th class="pb-3">Action</th>
+                                <th class="pb-3">Radio & #</th>
+                                <th class="pb-3">Site & Work Location</th>
+                                <th class="pb-3">Date & Time</th>
+                                <th class="pb-3 pr-2 text-right">Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-table-body" class="divide-y divide-slate-800/70 text-sm sm:text-base">
+                            <!-- Rows injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 sm:px-6 border-t border-slate-800 bg-slate-900/50 rounded-b-3xl flex items-center justify-between">
+                <span id="log-total-count" class="text-sm text-slate-400 font-medium">0 total events</span>
+                <button onclick="closeLogModal()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition cursor-pointer">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Custom Confirmation for Reset / Clear All (Replaces native confirm()) -->
+    <div id="reset-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl fade-in">
+            <div class="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-5">
+                <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-2xl font-bold text-white">Reset Kiosk Data?</h3>
+            <p class="text-slate-400 text-sm sm:text-base mt-2 leading-relaxed">
+                Choose whether to clear only the active on-site list or wipe all saved history logs. We recommend exporting a CSV backup first.
+            </p>
+
+            <div class="mt-6 flex flex-col gap-3">
+                <button onclick="resetActiveOnly()" class="w-full py-3.5 px-4 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold rounded-xl text-left flex items-center justify-between transition cursor-pointer">
+                    <div>
+                        <div class="text-base">Check Out Everyone (End of Shift)</div>
+                        <div class="text-xs text-amber-300/70 font-normal">Sets occupancy to 0 & keeps Activity Log</div>
+                    </div>
+                    <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
+                </button>
+
+                <button onclick="resetEverything()" class="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-left flex items-center justify-between transition cursor-pointer">
+                    <div>
+                        <div class="text-base">Clear All Data & Logs</div>
+                        <div class="text-xs text-rose-100/80 font-normal">Permanently deletes occupancy & history</div>
+                    </div>
+                    <i data-lucide="trash-2" class="w-5 h-5 shrink-0"></i>
+                </button>
+
+                <button onclick="closeResetModal()" class="w-full py-3.5 px-4 mt-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl transition cursor-pointer">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Site Location & Work Location Configuration -->
+    <div id="location-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-lg p-6 sm:p-8 shadow-2xl fade-in">
+            <div class="flex items-center justify-between gap-4 mb-5">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                        <i data-lucide="map-pin" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl sm:text-2xl font-bold text-white">Kiosk Location Settings</h3>
+                        <p class="text-xs sm:text-sm text-slate-400">Recorded automatically with every entry & exit</p>
+                    </div>
+                </div>
+                <button onclick="closeLocationModal()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer" aria-label="Close location modal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form onsubmit="saveLocations(event)" class="flex flex-col gap-5">
+                <div>
+                    <label for="input-site-location" class="block text-sm font-bold text-slate-300 mb-2">
+                        Site Location
+                    </label>
+                    <input 
+                        type="text" 
+                        id="input-site-location" 
+                        placeholder="e.g., Main Gate - North Wing" 
+                        autocomplete="off"
+                        class="w-full h-14 bg-slate-950 border-2 border-slate-700 focus:border-amber-500 rounded-2xl px-4 text-base sm:text-lg font-semibold text-white placeholder-slate-500 outline-none transition"
+                    >
+                </div>
+
+                <div>
+                    <label for="input-work-location" class="block text-sm font-bold text-slate-300 mb-2">
+                        Work Location
+                    </label>
+                    <input 
+                        type="text" 
+                        id="input-work-location" 
+                        placeholder="e.g., Electrical & HVAC Zone" 
+                        autocomplete="off"
+                        class="w-full h-14 bg-slate-950 border-2 border-slate-700 focus:border-sky-500 rounded-2xl px-4 text-base sm:text-lg font-semibold text-white placeholder-slate-500 outline-none transition"
+                    >
+                </div>
+
+                <div class="mt-2 flex flex-col sm:flex-row gap-3">
+                    <button type="submit" class="flex-1 py-4 px-6 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-extrabold text-base sm:text-lg rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition cursor-pointer">
+                        <i data-lucide="check" class="w-5 h-5 stroke-[2.5]"></i>
+                        <span>Save Locations</span>
+                    </button>
+                    <button type="button" onclick="closeLocationModal()" class="py-4 px-6 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-2xl transition cursor-pointer">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3B: Edit / Assign Radio & Radio Number for Active Worker -->
+    <div id="radio-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl fade-in">
+            <div class="flex items-center justify-between gap-4 mb-5">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+                        <i data-lucide="radio" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white">Radio Assignment</h3>
+                        <p id="radio-modal-worker-name" class="text-xs sm:text-sm text-slate-400 font-medium break-words">Worker</p>
+                    </div>
+                </div>
+                <button onclick="closeRadioModal()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer" aria-label="Close radio modal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form onsubmit="saveWorkerRadio(event)" class="flex flex-col gap-5">
+                <input type="hidden" id="radio-modal-worker-id">
+
+                <label for="radio-modal-checkbox" class="flex items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-violet-500/50 cursor-pointer select-none transition">
+                    <span class="text-base font-bold text-white">Assign Radio to Worker</span>
+                    <input type="checkbox" id="radio-modal-checkbox" onchange="syncRadioModalInputState()" class="w-5 h-5 rounded accent-violet-500 cursor-pointer">
+                </label>
+
+                <div id="radio-modal-number-group">
+                    <label for="radio-modal-number-input" class="block text-sm font-bold text-slate-300 mb-2">
+                        Radio Number / Unit ID
+                    </label>
+                    <input 
+                        type="text" 
+                        id="radio-modal-number-input" 
+                        placeholder="e.g., R-04 or Unit 12" 
+                        autocomplete="off"
+                        class="w-full h-14 bg-slate-950 border-2 border-slate-700 focus:border-violet-500 rounded-2xl px-4 text-base sm:text-lg font-bold text-white placeholder-slate-500 outline-none transition"
+                    >
+                </div>
+
+                <div class="mt-1 flex flex-col sm:flex-row gap-3">
+                    <button type="submit" class="flex-1 py-4 px-6 bg-violet-500 hover:bg-violet-400 active:scale-[0.98] text-slate-950 font-extrabold text-base rounded-2xl shadow-lg shadow-violet-500/20 flex items-center justify-center gap-2 transition cursor-pointer">
+                        <i data-lucide="check" class="w-5 h-5 stroke-[2.5]"></i>
+                        <span>Save Radio</span>
+                    </button>
+                    <button type="button" onclick="closeRadioModal()" class="py-4 px-6 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-2xl transition cursor-pointer">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 4: Send Exported File & Summary Report to WhatsApp -->
+    <div id="whatsapp-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4 sm:p-6">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl fade-in">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-800 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-[#25D366]/15 border border-[#25D366]/30 flex items-center justify-center text-[#25D366] shrink-0">
+                        <i data-lucide="message-circle" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl sm:text-2xl font-bold text-white">Send to WhatsApp</h3>
+                        <p id="whatsapp-modal-subtitle" class="text-xs sm:text-sm text-slate-400">Share CSV file & attendance summary via WhatsApp</p>
+                    </div>
+                </div>
+                <button onclick="closeWhatsAppModal()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer" aria-label="Close WhatsApp modal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto flex-1 flex flex-col gap-5">
+                <!-- Native Mobile/Tablet CSV File Share Banner (Shown when Web Share API supports files) -->
+                <div id="native-share-section" class="hidden bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <div class="text-sm font-bold text-emerald-300 flex items-center gap-1.5">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                            <span>Direct CSV File Attachment Ready</span>
+                        </div>
+                        <p class="text-xs text-slate-300 mt-1">Attach <strong id="wa-csv-filename" class="text-white">sitepass_log.csv</strong> directly to any WhatsApp chat.</p>
+                    </div>
+                    <button type="button" onclick="shareCSVViaNativeSheet()" class="py-3 px-4 bg-[#25D366] hover:bg-[#20bd5a] active:scale-95 text-slate-950 font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shrink-0 transition cursor-pointer">
+                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                        <span>Share CSV File</span>
+                    </button>
+                </div>
+
+                <!-- Optional Recipient WhatsApp Phone Number -->
+                <div>
+                    <label for="wa-phone-input" class="block text-sm font-bold text-slate-300 mb-1.5">
+                        Recipient WhatsApp Number <span class="text-slate-500 font-normal">(Optional)</span>
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="wa-phone-input" 
+                        oninput="saveWhatsAppPhone()"
+                        placeholder="e.g., 97333001122 (Country code + number, no +)" 
+                        autocomplete="tel"
+                        class="w-full h-13 bg-slate-950 border-2 border-slate-700 focus:border-[#25D366] rounded-2xl px-4 py-3 text-base font-semibold text-white placeholder-slate-500 outline-none transition"
+                    >
+                    <p class="text-xs text-slate-400 mt-1.5">Include country code without spaces or <code class="text-slate-300">+</code> (e.g., <span class="text-slate-300 font-mono">973...</span>). Leave blank to pick a contact in WhatsApp.</p>
+                </div>
+
+                <!-- Formatted WhatsApp Summary Preview -->
+                <div class="flex flex-col flex-1">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label for="wa-report-preview" class="text-sm font-bold text-slate-300">
+                            Attendance Report Preview
+                        </label>
+                        <button type="button" onclick="copyWhatsAppReport()" class="text-xs font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 transition cursor-pointer">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span>Copy Report</span>
+                        </button>
+                    </div>
+                    <textarea 
+                        id="wa-report-preview" 
+                        rows="8" 
+                        readonly
+                        class="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm font-mono text-slate-200 leading-relaxed outline-none resize-none"
+                    ></textarea>
+                </div>
+            </div>
+
+            <!-- Modal Footer Actions -->
+            <div class="p-4 sm:px-6 border-t border-slate-800 bg-slate-900/60 rounded-b-3xl flex flex-col sm:flex-row gap-3">
+                <button type="button" onclick="launchWhatsAppDirect()" class="flex-1 py-4 px-5 bg-[#25D366] hover:bg-[#20bd5a] active:scale-[0.98] text-slate-950 font-extrabold text-base rounded-2xl shadow-lg shadow-[#25D366]/20 flex items-center justify-center gap-2.5 transition cursor-pointer">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                    <span>Open WhatsApp</span>
+                </button>
+                <button type="button" onclick="exportCSV()" class="py-4 px-5 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-sm sm:text-base rounded-2xl flex items-center justify-center gap-2 transition cursor-pointer" title="Download CSV file again">
+                    <i data-lucide="download" class="w-5 h-5"></i>
+                    <span>Download CSV</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // Storage Keys
+        const STORAGE_KEY_ACTIVE = 'sitepass_active_workers_v1';
+        const STORAGE_KEY_LOGS = 'sitepass_activity_logs_v1';
+        const STORAGE_KEY_KNOWN = 'sitepass_known_names_v1';
+        const STORAGE_KEY_LOCATIONS = 'sitepass_locations_v1';
+        const STORAGE_KEY_WA_PHONE = 'sitepass_wa_recipient_v1';
+
+        // Application State
+        let activeWorkers = []; // Array of { id, name, workerIdNo, vendorName, badgeType, checkInTime, siteLocation, workLocation, hasRadio, radioNumber }
+        let activityLogs = [];  // Array of { id, name, workerIdNo, vendorName, badgeType, action: 'IN' | 'OUT', timestamp, durationStr, siteLocation, workLocation, hasRadio, radioNumber }
+        let knownNames = [];    // Array of recent unique worker profiles { name, workerIdNo, vendorName, badgeType } (or legacy strings)
+        let selectedBadgeType = 'BB'; // Default badge type: 'BB' | 'YB' | 'VB'
+        let siteLocation = '';  // Manual Site Location
+        let workLocation = '';  // Manual Work Location
+        let savedWaPhone = '';  // Saved WhatsApp recipient phone number
+
+        const BADGE_META = {
+            BB: {
+                code: 'BB',
+                label: 'Blue Badge',
+                pillClass: 'bg-sky-500/15 border-sky-500/40 text-sky-300',
+                activeBtnClass: 'border-sky-500 bg-sky-500/20 text-sky-200',
+                inactiveBtnClass: 'border-slate-800 bg-slate-950 text-slate-400 hover:border-sky-500/50 hover:text-sky-200'
+            },
+            YB: {
+                code: 'YB',
+                label: 'Yellow Badge',
+                pillClass: 'bg-amber-500/15 border-amber-500/40 text-amber-300',
+                activeBtnClass: 'border-amber-500 bg-amber-500/20 text-amber-200',
+                inactiveBtnClass: 'border-slate-800 bg-slate-950 text-slate-400 hover:border-amber-500/50 hover:text-amber-200'
+            },
+            VB: {
+                code: 'VB',
+                label: 'Visitor Badge',
+                pillClass: 'bg-purple-500/15 border-purple-500/40 text-purple-300',
+                activeBtnClass: 'border-purple-500 bg-purple-500/20 text-purple-200',
+                inactiveBtnClass: 'border-slate-800 bg-slate-950 text-slate-400 hover:border-purple-500/50 hover:text-purple-200'
+            }
+        };
+
+        function normalizeBadgeType(code) {
+            const upper = String(code || '').trim().toUpperCase();
+            return BADGE_META[upper] ? upper : 'BB';
+        }
+
+        function getBadgeInfo(code) {
+            return BADGE_META[normalizeBadgeType(code)];
+        }
+
+        function selectBadgeType(code) {
+            selectedBadgeType = normalizeBadgeType(code);
+            ['BB', 'YB', 'VB'].forEach(key => {
+                const btn = document.getElementById(`badge-btn-${key}`);
+                if (!btn) return;
+                const isSelected = key === selectedBadgeType;
+                const meta = BADGE_META[key];
+                btn.className = `h-13 py-2 px-2 rounded-2xl border-2 ${isSelected ? meta.activeBtnClass : meta.inactiveBtnClass} font-extrabold text-xs sm:text-sm flex flex-col items-center justify-center leading-tight transition cursor-pointer`;
+            });
+        }
+
+        // Update Live Date & Clock
+        function updateClock() {
+            const now = new Date();
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const dateFormatted = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+
+            const pad2 = (n) => String(n).padStart(2, '0');
+            const h24 = now.getHours();
+            const ampm = h24 >= 12 ? 'PM' : 'AM';
+            const h12 = h24 % 12 || 12;
+            const timeFormatted = `${pad2(h12)}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())} ${ampm}`;
+
+            const dateEl = document.getElementById('live-date');
+            const clockEl = document.getElementById('live-clock');
+            if (dateEl) dateEl.textContent = dateFormatted;
+            if (clockEl) clockEl.textContent = timeFormatted;
+        }
+
+        // Format Worker Name cleanly (Title Case while preserving full name)
+        function formatWorkerName(raw) {
+            return String(raw || '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .split(' ')
+                .map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : '')
+                .join(' ');
+        }
+
+        // Save All State to localStorage with Graceful Fallback
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY_ACTIVE, JSON.stringify(activeWorkers));
+                localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(activityLogs));
+                localStorage.setItem(STORAGE_KEY_KNOWN, JSON.stringify(knownNames));
+                localStorage.setItem(STORAGE_KEY_LOCATIONS, JSON.stringify({
+                    siteLocation: siteLocation,
+                    workLocation: workLocation
+                }));
+                localStorage.setItem(STORAGE_KEY_WA_PHONE, savedWaPhone);
+                return true;
+            } catch (err) {
+                console.warn('localStorage restricted; keeping state in memory:', err);
+                return false;
+            }
+        }
+
+        // Load Saved State from localStorage with Safe Defaults
+        function loadFromStorage() {
+            try {
+                const savedActive = localStorage.getItem(STORAGE_KEY_ACTIVE);
+                const savedLogs = localStorage.getItem(STORAGE_KEY_LOGS);
+                const savedKnown = localStorage.getItem(STORAGE_KEY_KNOWN);
+                const savedLocations = localStorage.getItem(STORAGE_KEY_LOCATIONS);
+                const savedPhone = localStorage.getItem(STORAGE_KEY_WA_PHONE);
+
+                activeWorkers = savedActive ? JSON.parse(savedActive) : [];
+                activityLogs = savedLogs ? JSON.parse(savedLogs) : [];
+                knownNames = savedKnown ? JSON.parse(savedKnown) : [];
+
+                if (savedLocations) {
+                    const parsedLoc = JSON.parse(savedLocations);
+                    siteLocation = parsedLoc && typeof parsedLoc.siteLocation === 'string' ? parsedLoc.siteLocation : '';
+                    workLocation = parsedLoc && typeof parsedLoc.workLocation === 'string' ? parsedLoc.workLocation : '';
+                } else {
+                    siteLocation = '';
+                    workLocation = '';
+                }
+
+                savedWaPhone = typeof savedPhone === 'string' ? savedPhone : '';
+            } catch (err) {
+                console.warn('Could not load saved kiosk data from localStorage:', err);
+                activeWorkers = [];
+                activityLogs = [];
+                knownNames = [];
+                siteLocation = '';
+                workLocation = '';
+                savedWaPhone = '';
+            }
+        }
+
+        // Toggle Radio Number Input Visibility on Check-In Form
+        function toggleCheckInRadioInput() {
+            const checkbox = document.getElementById('radio-assigned-checkbox');
+            const wrapper = document.getElementById('radio-number-input-wrapper');
+            const numInput = document.getElementById('radio-number-input');
+            if (!checkbox || !wrapper) return;
+
+            if (checkbox.checked) {
+                wrapper.classList.remove('hidden');
+                wrapper.classList.add('flex');
+                if (numInput) setTimeout(() => numInput.focus(), 30);
+            } else {
+                wrapper.classList.add('hidden');
+                wrapper.classList.remove('flex');
+                if (numInput) numInput.value = '';
+            }
+        }
+
+        // Check-In Handler
+        function handleCheckIn(event) {
+            if (event) event.preventDefault();
+            const input = document.getElementById('worker-name-input');
+            const idInput = document.getElementById('worker-id-input');
+            const vendorInput = document.getElementById('vendor-name-input');
+            const radioCheckbox = document.getElementById('radio-assigned-checkbox');
+            const radioNumInput = document.getElementById('radio-number-input');
+            const rawName = input.value;
+
+            if (!rawName || !rawName.trim()) {
+                input.focus();
+                showToast('Please enter a worker name first.', 'warning');
+                return;
+            }
+
+            const cleanName = formatWorkerName(rawName);
+            const cleanIdNo = idInput && idInput.value.trim() ? idInput.value.trim().toUpperCase() : '';
+            const cleanVendor = vendorInput && vendorInput.value.trim() ? formatWorkerName(vendorInput.value) : '';
+            const badgeCode = normalizeBadgeType(selectedBadgeType);
+            const hasRadio = radioCheckbox ? radioCheckbox.checked : false;
+            const radioNum = hasRadio && radioNumInput ? radioNumInput.value.trim() : '';
+            performCheckIn(cleanName, cleanVendor, badgeCode, hasRadio, radioNum, cleanIdNo);
+
+            input.value = '';
+            if (idInput) idInput.value = '';
+            if (vendorInput) vendorInput.value = '';
+            if (radioCheckbox) radioCheckbox.checked = false;
+            toggleCheckInRadioInput();
+            document.getElementById('clear-input-btn').classList.add('hidden');
+            input.focus();
+        }
+
+        // Core Check-In Logic
+        function performCheckIn(name, vendorName = '', badgeType = 'BB', hasRadio = false, radioNumber = '', workerIdNo = '') {
+            // Prevent duplicate simultaneous check-ins for the exact same name
+            const alreadyInside = activeWorkers.find(w => w.name.toLowerCase() === name.toLowerCase());
+            if (alreadyInside) {
+                showToast(`${alreadyInside.name} is already checked in!`, 'warning');
+                return;
+            }
+
+            const nowISO = new Date().toISOString();
+            const currentSite = siteLocation.trim() || 'Unspecified Site';
+            const currentWork = workLocation.trim() || 'Unspecified Work Area';
+            const cleanIdNo = String(workerIdNo || '').trim();
+            const cleanVendor = String(vendorName || '').trim() || 'Direct / Unspecified';
+            const cleanBadge = normalizeBadgeType(badgeType);
+            const radioFlag = Boolean(hasRadio);
+            const cleanRadioNum = radioFlag ? String(radioNumber || '').trim() : '';
+
+            // Check if this radio number is already assigned to another active worker
+            if (radioFlag && cleanRadioNum) {
+                const duplicateRadio = activeWorkers.find(
+                    w => w.hasRadio && w.radioNumber && w.radioNumber.toLowerCase() === cleanRadioNum.toLowerCase()
+                );
+                if (duplicateRadio) {
+                    showToast(`Warning: Radio #${cleanRadioNum} is already with ${duplicateRadio.name}!`, 'warning');
+                }
+            }
+
+            const newWorker = {
+                id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                name: name,
+                workerIdNo: cleanIdNo,
+                vendorName: cleanVendor,
+                badgeType: cleanBadge,
+                checkInTime: nowISO,
+                siteLocation: currentSite,
+                workLocation: currentWork,
+                hasRadio: radioFlag,
+                radioNumber: cleanRadioNum
+            };
+
+            // Add to top of active list
+            activeWorkers.unshift(newWorker);
+
+            // Add to activity log
+            activityLogs.unshift({
+                id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                name: name,
+                workerIdNo: cleanIdNo,
+                vendorName: cleanVendor,
+                badgeType: cleanBadge,
+                action: 'IN',
+                timestamp: nowISO,
+                durationStr: '—',
+                siteLocation: currentSite,
+                workLocation: currentWork,
+                hasRadio: radioFlag,
+                radioNumber: cleanRadioNum
+            });
+
+            // Maintain up to 8 recent worker profiles (preserving ID No., vendor & badge type) for quick re-entry
+            const normalizedKnown = knownNames.map(item =>
+                typeof item === 'string'
+                    ? { name: item, workerIdNo: '', vendorName: '', badgeType: 'BB' }
+                    : item
+            );
+            knownNames = [
+                {
+                    name: name,
+                    workerIdNo: cleanIdNo,
+                    vendorName: cleanVendor === 'Direct / Unspecified' ? '' : cleanVendor,
+                    badgeType: cleanBadge
+                },
+                ...normalizedKnown.filter(item => item.name.toLowerCase() !== name.toLowerCase())
+            ].slice(0, 8);
+
+            saveToStorage();
+            renderAll();
+            const idLabel = cleanIdNo ? ` [ID: ${cleanIdNo}]` : '';
+            const radioLabel = radioFlag ? (cleanRadioNum ? ` • Radio #${cleanRadioNum}` : ' • Radio') : '';
+            showToast(`${name}${idLabel} (${cleanBadge} • ${cleanVendor}) checked IN${radioLabel}`, 'success');
+        }
+
+        // Open Radio Assignment & Radio Number Modal for an Active Worker On-Site
+        function openRadioModal(workerId) {
+            const worker = activeWorkers.find(w => w.id === workerId);
+            if (!worker) return;
+
+            document.getElementById('radio-modal-worker-id').value = worker.id;
+            document.getElementById('radio-modal-worker-name').textContent = worker.name;
+            document.getElementById('radio-modal-checkbox').checked = Boolean(worker.hasRadio);
+            document.getElementById('radio-modal-number-input').value = worker.radioNumber || '';
+            syncRadioModalInputState();
+
+            const modal = document.getElementById('radio-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+            if (worker.hasRadio) {
+                setTimeout(() => document.getElementById('radio-modal-number-input').focus(), 40);
+            }
+        }
+
+        function closeRadioModal() {
+            const modal = document.getElementById('radio-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function syncRadioModalInputState() {
+            const checked = document.getElementById('radio-modal-checkbox').checked;
+            const group = document.getElementById('radio-modal-number-group');
+            const input = document.getElementById('radio-modal-number-input');
+            if (checked) {
+                group.classList.remove('opacity-40', 'pointer-events-none');
+                if (input) setTimeout(() => input.focus(), 30);
+            } else {
+                group.classList.add('opacity-40', 'pointer-events-none');
+            }
+        }
+
+        function saveWorkerRadio(event) {
+            if (event) event.preventDefault();
+            const workerId = document.getElementById('radio-modal-worker-id').value;
+            const worker = activeWorkers.find(w => w.id === workerId);
+            if (!worker) {
+                closeRadioModal();
+                return;
+            }
+
+            const hasRadio = document.getElementById('radio-modal-checkbox').checked;
+            const radioNumber = hasRadio ? document.getElementById('radio-modal-number-input').value.trim() : '';
+
+            worker.hasRadio = hasRadio;
+            worker.radioNumber = radioNumber;
+
+            // Also update the worker's latest IN entry in activityLogs so history reflects the assigned radio #
+            const latestInLog = activityLogs.find(
+                l => l.action === 'IN' && l.name === worker.name && l.timestamp === worker.checkInTime
+            );
+            if (latestInLog) {
+                latestInLog.hasRadio = hasRadio;
+                latestInLog.radioNumber = radioNumber;
+            }
+
+            saveToStorage();
+            renderAll();
+            closeRadioModal();
+
+            if (hasRadio) {
+                showToast(
+                    radioNumber ? `Radio #${radioNumber} assigned to ${worker.name}` : `Radio assigned to ${worker.name}`,
+                    'info'
+                );
+            } else {
+                showToast(`Radio unassigned from ${worker.name}`, 'info');
+            }
+        }
+
+        // Core Check-Out Logic
+        function performCheckOut(workerId) {
+            const index = activeWorkers.findIndex(w => w.id === workerId);
+            if (index === -1) return;
+
+            const worker = activeWorkers[index];
+            const now = new Date();
+            const nowISO = now.toISOString();
+            const durationStr = calculateDuration(worker.checkInTime, nowISO);
+            const currentSite = siteLocation.trim() || worker.siteLocation || 'Unspecified Site';
+            const currentWork = workLocation.trim() || worker.workLocation || 'Unspecified Work Area';
+            const hadRadio = Boolean(worker.hasRadio);
+            const radioNumber = hadRadio ? (worker.radioNumber || '') : '';
+
+            // Remove from active list
+            activeWorkers.splice(index, 1);
+
+            // Record exit in activity log
+            activityLogs.unshift({
+                id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                name: worker.name,
+                workerIdNo: worker.workerIdNo || '',
+                vendorName: worker.vendorName || 'Direct / Unspecified',
+                badgeType: normalizeBadgeType(worker.badgeType),
+                action: 'OUT',
+                timestamp: nowISO,
+                durationStr: durationStr,
+                siteLocation: currentSite,
+                workLocation: currentWork,
+                hasRadio: hadRadio,
+                radioNumber: radioNumber
+            });
+
+            saveToStorage();
+            renderAll();
+            const collectAlert = hadRadio
+                ? (radioNumber ? ` — Collect Radio #${radioNumber}!` : ' — Collect Radio!')
+                : '';
+            showToast(
+                `${worker.name} checked OUT (${durationStr})${collectAlert}`,
+                hadRadio ? 'warning' : 'info'
+            );
+        }
+
+        // Calculate Human-Readable Time On-Site
+        function calculateDuration(startISO, endISO) {
+            const diffMs = Math.max(0, new Date(endISO) - new Date(startISO));
+            const totalMins = Math.floor(diffMs / 60000);
+            const hours = Math.floor(totalMins / 60);
+            const mins = totalMins % 60;
+
+            if (hours > 0) {
+                return `${hours}h ${mins}m`;
+            }
+            return `${mins}m`;
+        }
+
+        // Safe Timestamp Formatting for Display (No fragile locale options)
+        function formatTimeShort(isoString) {
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return '--:--';
+            const pad2 = (n) => String(n).padStart(2, '0');
+            const h24 = d.getHours();
+            const ampm = h24 >= 12 ? 'PM' : 'AM';
+            const h12 = h24 % 12 || 12;
+            return `${h12}:${pad2(d.getMinutes())} ${ampm}`;
+        }
+
+        function formatDateTimeFull(isoString) {
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return '—';
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} • ${formatTimeShort(isoString)}`;
+        }
+
+        // Render Header Location Banner
+        function renderLocationBanner() {
+            const siteEl = document.getElementById('header-site-location');
+            const workEl = document.getElementById('header-work-location');
+            if (siteEl) {
+                siteEl.textContent = siteLocation.trim() || 'Not Set';
+                siteEl.className = siteLocation.trim() ? 'font-bold text-white break-words' : 'font-semibold text-slate-500 italic';
+            }
+            if (workEl) {
+                workEl.textContent = workLocation.trim() || 'Not Set';
+                workEl.className = workLocation.trim() ? 'font-bold text-white break-words' : 'font-semibold text-slate-500 italic';
+            }
+        }
+
+        // Render Live Occupancy Counter & Daily Summaries
+        function renderOccupancyStats() {
+            const count = activeWorkers.length;
+            const countEl = document.getElementById('occupancy-count');
+            const labelEl = document.getElementById('occupancy-label');
+            const logBadgeEl = document.getElementById('log-badge');
+            const todaySummaryEl = document.getElementById('today-entries-summary');
+            const radiosSummaryEl = document.getElementById('active-radios-summary');
+
+            if (countEl) countEl.textContent = count;
+            if (labelEl) labelEl.textContent = count === 1 ? 'worker inside' : 'workers inside';
+            if (logBadgeEl) logBadgeEl.textContent = activityLogs.length;
+
+            const todayStr = new Date().toDateString();
+            const entriesToday = activityLogs.filter(
+                log => log.action === 'IN' && new Date(log.timestamp).toDateString() === todayStr
+            ).length;
+            if (todaySummaryEl) {
+                todaySummaryEl.textContent = `${entriesToday} ${entriesToday === 1 ? 'entry' : 'entries'} today`;
+            }
+
+            const radiosOutCount = activeWorkers.filter(w => Boolean(w.hasRadio)).length;
+            if (radiosSummaryEl) {
+                radiosSummaryEl.innerHTML = `<i data-lucide="radio" class="w-3.5 h-3.5 text-violet-400"></i><span>${radiosOutCount} ${radiosOutCount === 1 ? 'radio' : 'radios'} out</span>`;
+            }
+        }
+
+        // Render One-Tap Quick Re-Entry Chips & Vendor Datalist
+        function renderQuickReEntry() {
+            const bar = document.getElementById('recent-workers-bar');
+            const list = document.getElementById('recent-workers-list');
+            const vendorDatalist = document.getElementById('vendor-suggestions-list');
+
+            // Populate vendor autocomplete suggestions from recent & logged vendors
+            if (vendorDatalist) {
+                const vendorSet = new Set();
+                knownNames.forEach(item => {
+                    if (item && typeof item === 'object' && item.vendorName) vendorSet.add(item.vendorName);
+                });
+                activityLogs.forEach(log => {
+                    if (log.vendorName && log.vendorName !== 'Direct / Unspecified') vendorSet.add(log.vendorName);
+                });
+                vendorDatalist.innerHTML = Array.from(vendorSet)
+                    .slice(0, 15)
+                    .map(v => `<option value="${escapeHtml(v)}"></option>`)
+                    .join('');
+            }
+
+            if (!bar || !list) return;
+
+            const activeLower = new Set(activeWorkers.map(w => w.name.toLowerCase()));
+            const normalizedKnown = knownNames.map(item =>
+                typeof item === 'string'
+                    ? { name: item, workerIdNo: '', vendorName: '', badgeType: 'BB' }
+                    : item
+            );
+            const availableRecent = normalizedKnown.filter(item => item.name && !activeLower.has(item.name.toLowerCase()));
+
+            if (availableRecent.length === 0) {
+                bar.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+
+            bar.classList.remove('hidden');
+            list.innerHTML = availableRecent.map((item, idx) => {
+                const badge = getBadgeInfo(item.badgeType);
+                const idLabel = item.workerIdNo ? ` • ID: ${escapeHtml(item.workerIdNo)}` : '';
+                const vendorLabel = item.vendorName ? ` • ${escapeHtml(item.vendorName)}` : '';
+                return `
+                    <button
+                        type="button"
+                        onclick="quickReCheckIn(${idx})"
+                        data-reentry-idx="${idx}"
+                        class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 text-slate-200 hover:text-emerald-300 text-xs sm:text-sm font-semibold transition cursor-pointer text-left whitespace-normal break-words flex items-center gap-2"
+                    >
+                        <span>+ ${escapeHtml(item.name)}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-black border ${badge.pillClass}">${badge.code}</span>
+                        ${idLabel ? `<span class="text-slate-300 font-mono text-xs">${idLabel}</span>` : ''}
+                        ${vendorLabel ? `<span class="text-slate-400 font-normal">${vendorLabel}</span>` : ''}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function quickReCheckIn(filteredIdx) {
+            const activeLower = new Set(activeWorkers.map(w => w.name.toLowerCase()));
+            const normalizedKnown = knownNames.map(item =>
+                typeof item === 'string'
+                    ? { name: item, workerIdNo: '', vendorName: '', badgeType: 'BB' }
+                    : item
+            );
+            const availableRecent = normalizedKnown.filter(item => item.name && !activeLower.has(item.name.toLowerCase()));
+            const profile = availableRecent[filteredIdx];
+            if (!profile) return;
+
+            const hasRadio = document.getElementById('radio-assigned-checkbox')?.checked || false;
+            const radioNum = document.getElementById('radio-number-input')?.value || '';
+            performCheckIn(profile.name, profile.vendorName || '', profile.badgeType || 'BB', hasRadio, radioNum, profile.workerIdNo || '');
+        }
+
+        // Render Active On-Site Roster Cards (Full Worker Names Without Truncation)
+        function renderActiveWorkers() {
+            const grid = document.getElementById('active-workers-grid');
+            const emptyState = document.getElementById('empty-active-state');
+            const searchInput = document.getElementById('search-active-input');
+            if (!grid || !emptyState) return;
+
+            const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+            const filtered = activeWorkers.filter(w => {
+                const badgeInfo = getBadgeInfo(w.badgeType);
+                return (
+                    w.name.toLowerCase().includes(query) ||
+                    (w.workerIdNo && w.workerIdNo.toLowerCase().includes(query)) ||
+                    (w.vendorName && w.vendorName.toLowerCase().includes(query)) ||
+                    badgeInfo.code.toLowerCase().includes(query) ||
+                    badgeInfo.label.toLowerCase().includes(query) ||
+                    (w.siteLocation && w.siteLocation.toLowerCase().includes(query)) ||
+                    (w.workLocation && w.workLocation.toLowerCase().includes(query)) ||
+                    (w.hasRadio && 'radio'.includes(query)) ||
+                    (w.radioNumber && w.radioNumber.toLowerCase().includes(query))
+                );
+            });
+
+            if (activeWorkers.length === 0) {
+                grid.innerHTML = '';
+                grid.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            grid.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-10 text-center text-slate-400 bg-slate-950/60 border border-slate-800 rounded-2xl">
+                        No active workers match "<span class="text-white font-semibold">${escapeHtml(searchInput.value)}</span>".
+                    </div>
+                `;
+                return;
+            }
+
+            const nowISO = new Date().toISOString();
+            grid.innerHTML = filtered.map(worker => {
+                const elapsed = calculateDuration(worker.checkInTime, nowISO);
+                const hasRadio = Boolean(worker.hasRadio);
+                const radioNum = (worker.radioNumber || '').trim();
+                const radioBadgeText = radioNum ? `Radio #${escapeHtml(radioNum)}` : 'Radio';
+                const radioButtonText = hasRadio ? (radioNum ? `Radio #${escapeHtml(radioNum)}` : 'Radio: Yes') : 'Radio: No';
+                const badgeInfo = getBadgeInfo(worker.badgeType);
+                const vendorDisplay = worker.vendorName || 'Direct / Unspecified';
+                const workerIdNo = (worker.workerIdNo || '').trim();
+
+                return `
+                    <div class="bg-slate-950 border ${hasRadio ? 'border-violet-500/40' : 'border-slate-800'} hover:border-slate-700 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition fade-in">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-start gap-2.5 flex-wrap">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 mt-2 shrink-0"></span>
+                                <h3 class="text-lg sm:text-xl font-bold text-white whitespace-normal break-words leading-snug">
+                                    ${escapeHtml(worker.name)}
+                                </h3>
+                                ${workerIdNo ? `
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-xs font-mono font-bold shrink-0">
+                                        <i data-lucide="id-card" class="w-3.5 h-3.5 text-slate-400"></i>
+                                        <span>ID: ${escapeHtml(workerIdNo)}</span>
+                                    </span>
+                                ` : ''}
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-xs font-extrabold tracking-wide shrink-0 ${badgeInfo.pillClass}" title="${badgeInfo.label}">
+                                    <span>${badgeInfo.code} • ${badgeInfo.label}</span>
+                                </span>
+                                ${hasRadio ? `
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-violet-500/15 border border-violet-500/40 text-violet-300 text-xs font-extrabold uppercase tracking-wide shrink-0">
+                                        <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                                        <span>${radioBadgeText}</span>
+                                    </span>
+                                ` : ''}
+                            </div>
+                            <div class="mt-2 pl-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-400">
+                                <span class="inline-flex items-center gap-1.5 text-slate-200 font-semibold whitespace-normal break-words">
+                                    <i data-lucide="building" class="w-3.5 h-3.5 text-sky-400 shrink-0"></i>
+                                    ${escapeHtml(vendorDisplay)}
+                                </span>
+                                <span class="inline-flex items-center gap-1.5 text-emerald-300/90 font-medium">
+                                    <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                                    In at ${formatTimeShort(worker.checkInTime)} (${elapsed})
+                                </span>
+                                <span class="inline-flex items-center gap-1.5 whitespace-normal break-words">
+                                    <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+                                    ${escapeHtml(worker.siteLocation || 'Unspecified Site')} • ${escapeHtml(worker.workLocation || 'Unspecified Work Area')}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                            <button
+                                type="button"
+                                onclick="openRadioModal('${escapeHtml(worker.id)}')"
+                                title="Assign or Edit Radio & Radio Number"
+                                class="px-3.5 py-3.5 ${hasRadio ? 'bg-violet-500/20 border-violet-500/50 text-violet-300 hover:bg-violet-500/30' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-violet-300 hover:border-violet-500/40'} border font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
+                            >
+                                <i data-lucide="radio" class="w-4 h-4"></i>
+                                <span class="sm:hidden lg:inline">${radioButtonText}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onclick="performCheckOut('${escapeHtml(worker.id)}')"
+                                class="flex-1 sm:flex-initial px-5 py-3.5 bg-rose-500/15 hover:bg-rose-500 border border-rose-500/40 hover:border-rose-500 text-rose-300 hover:text-white font-bold text-sm sm:text-base rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shrink-0 active:scale-95"
+                            >
+                                <i data-lucide="log-out" class="w-4 h-4"></i>
+                                <span>Check Out</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render Activity Log Modal Table (Full Worker Names Preserved)
+        function renderLogTable() {
+            const tbody = document.getElementById('log-table-body');
+            const emptyState = document.getElementById('log-empty-state');
+            const tableWrapper = document.getElementById('log-table-wrapper');
+            const totalCountEl = document.getElementById('log-total-count');
+            if (!tbody || !emptyState || !tableWrapper) return;
+
+            if (totalCountEl) {
+                totalCountEl.textContent = `${activityLogs.length} total ${activityLogs.length === 1 ? 'event' : 'events'}`;
+            }
+
+            if (activityLogs.length === 0) {
+                emptyState.classList.remove('hidden');
+                tableWrapper.classList.add('hidden');
+                tbody.innerHTML = '';
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            tableWrapper.classList.remove('hidden');
+
+            tbody.innerHTML = activityLogs.map(log => {
+                const isCheckIn = log.action === 'IN';
+                const badgeClass = isCheckIn
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+                const actionLabel = isCheckIn ? 'CHECK IN' : 'CHECK OUT';
+                const hasRadio = Boolean(log.hasRadio);
+                const radioNum = (log.radioNumber || '').trim();
+                const radioDisplay = hasRadio ? (radioNum ? `Yes (#${escapeHtml(radioNum)})` : 'Yes') : 'No';
+                const workerBadge = getBadgeInfo(log.badgeType);
+                const vendorText = log.vendorName || 'Direct / Unspecified';
+                const logIdNo = (log.workerIdNo || '').trim();
+
+                return `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-3.5 pl-2 pr-3 font-bold text-white whitespace-normal break-words max-w-[200px]">
+                            <div>${escapeHtml(log.name)}</div>
+                            ${logIdNo ? `<div class="text-xs font-mono font-semibold text-slate-400 mt-0.5">ID: ${escapeHtml(logIdNo)}</div>` : ''}
+                        </td>
+                        <td class="py-3.5 pr-3 whitespace-normal break-words max-w-[190px]">
+                            <div class="font-semibold text-slate-200 text-xs sm:text-sm">${escapeHtml(vendorText)}</div>
+                            <span class="inline-flex items-center mt-1 px-2 py-0.5 rounded-md text-[11px] font-extrabold border ${workerBadge.pillClass}">
+                                ${workerBadge.code} (${workerBadge.label})
+                            </span>
+                        </td>
+                        <td class="py-3.5 pr-3 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-extrabold border ${badgeClass}">
+                                ${actionLabel}
+                            </span>
+                        </td>
+                        <td class="py-3.5 pr-3 whitespace-nowrap">
+                            ${hasRadio
+                                ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-extrabold bg-violet-500/15 text-violet-300 border border-violet-500/30"><i data-lucide="radio" class="w-3.5 h-3.5"></i> ${radioDisplay}</span>`
+                                : `<span class="text-xs font-semibold text-slate-500">No</span>`
+                            }
+                        </td>
+                        <td class="py-3.5 pr-3 text-xs sm:text-sm text-slate-300 whitespace-normal break-words max-w-[200px]">
+                            <div class="font-semibold text-amber-300/90">${escapeHtml(log.siteLocation || 'Unspecified Site')}</div>
+                            <div class="text-slate-400">${escapeHtml(log.workLocation || 'Unspecified Work Area')}</div>
+                        </td>
+                        <td class="py-3.5 pr-3 text-xs sm:text-sm text-slate-300 whitespace-nowrap">
+                            ${formatDateTimeFull(log.timestamp)}
+                        </td>
+                        <td class="py-3.5 pr-2 text-right font-mono text-xs sm:text-sm font-semibold text-slate-300 whitespace-nowrap">
+                            ${escapeHtml(log.durationStr || '—')}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Master Render Function
+        function renderAll() {
+            renderLocationBanner();
+            renderOccupancyStats();
+            renderQuickReEntry();
+            renderActiveWorkers();
+            renderLogTable();
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
+        // Build CSV Content & File Object Helper
+        function buildCSVData() {
+            const headers = ['Worker Name', 'ID No.', 'Vendor Name', 'Badge Code', 'Badge Type', 'Action', 'Radio Assigned', 'Radio Number', 'Site Location', 'Work Location', 'Date', 'Time', 'ISO Timestamp', 'Time On-Site'];
+            const rows = activityLogs.map(log => {
+                const d = new Date(log.timestamp);
+                const dateStr = d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+                const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const logIdNo = (log.workerIdNo || '').replace(/"/g, '""');
+                const logVendor = (log.vendorName || 'Direct / Unspecified').replace(/"/g, '""');
+                const badgeInfo = getBadgeInfo(log.badgeType);
+                const logSite = (log.siteLocation || siteLocation || 'Unspecified Site').replace(/"/g, '""');
+                const logWork = (log.workLocation || workLocation || 'Unspecified Work Area').replace(/"/g, '""');
+                const radioStatus = log.hasRadio ? 'Yes' : 'No';
+                const radioNum = log.hasRadio ? (log.radioNumber || '').replace(/"/g, '""') : '';
+
+                return [
+                    `"${log.name.replace(/"/g, '""')}"`,
+                    `"${logIdNo}"`,
+                    `"${logVendor}"`,
+                    badgeInfo.code,
+                    `"${badgeInfo.label}"`,
+                    log.action === 'IN' ? 'Check In' : 'Check Out',
+                    radioStatus,
+                    `"${radioNum}"`,
+                    `"${logSite}"`,
+                    `"${logWork}"`,
+                    dateStr,
+                    `"${timeStr}"`,
+                    log.timestamp,
+                    `"${log.durationStr || ''}"`
+                ].join(',');
+            });
+
+            const csvContent = [headers.join(','), ...rows].join('\n');
+            const todayFilename = new Date().toISOString().slice(0, 10);
+            const filename = `sitepass_log_${todayFilename}.csv`;
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            let file = null;
+            try {
+                file = new File([blob], filename, { type: 'text/csv' });
+            } catch (e) {
+                file = null;
+            }
+
+            return { csvContent, filename, blob, file };
+        }
+
+        // Export Activity Log to CSV File (Including Site Location & Work Location)
+        function exportCSV(silent = false) {
+            if (activityLogs.length === 0) {
+                if (!silent) showToast('No records available to export yet.', 'warning');
+                return false;
+            }
+
+            const { filename, blob } = buildCSVData();
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            if (!silent) {
+                showToast('CSV attendance report downloaded!', 'success');
+            }
+            return true;
+        }
+
+        // Build Formatted WhatsApp Summary Text (Full Worker Names Preserved)
+        function buildWhatsAppSummaryText() {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const todayStr = now.toDateString();
+            const entriesToday = activityLogs.filter(
+                log => log.action === 'IN' && new Date(log.timestamp).toDateString() === todayStr
+            ).length;
+            const radiosOutCount = activeWorkers.filter(w => Boolean(w.hasRadio)).length;
+
+            const currentSite = siteLocation.trim() || 'Not Set';
+            const currentWork = workLocation.trim() || 'Not Set';
+
+            let lines = [
+                `*SitePass Attendance Report*`,
+                `Date: ${dateStr} (${timeStr})`,
+                `Site Location: ${currentSite}`,
+                `Work Location: ${currentWork}`,
+                `Live Occupancy: *${activeWorkers.length}* ${activeWorkers.length === 1 ? 'worker' : 'workers'} inside`,
+                `Radios Assigned On-Site: *${radiosOutCount}*`,
+                `Total Entries Today: *${entriesToday}*`,
+                ``
+            ];
+
+            if (activeWorkers.length > 0) {
+                lines.push(`*Currently On-Site (${activeWorkers.length}):*`);
+                activeWorkers.forEach((w, idx) => {
+                    const badgeInfo = getBadgeInfo(w.badgeType);
+                    const idStr = w.workerIdNo ? ` [ID: ${w.workerIdNo}]` : '';
+                    const vendorStr = w.vendorName && w.vendorName !== 'Direct / Unspecified' ? ` — ${w.vendorName}` : '';
+                    const radioTag = w.hasRadio ? (w.radioNumber ? ` [Radio #${w.radioNumber}]` : ' [Radio]') : '';
+                    lines.push(`${idx + 1}. ${w.name}${idStr} [${badgeInfo.code} - ${badgeInfo.label}]${vendorStr}${radioTag} (In: ${formatTimeShort(w.checkInTime)})`);
+                });
+                lines.push(``);
+            } else {
+                lines.push(`*Currently On-Site:* None (0)`, ``);
+            }
+
+            const recentLogs = activityLogs.slice(0, 10);
+            if (recentLogs.length > 0) {
+                lines.push(`*Recent Activity (Last ${recentLogs.length}):*`);
+                recentLogs.forEach(log => {
+                    const badgeInfo = getBadgeInfo(log.badgeType);
+                    const idStr = log.workerIdNo ? ` [ID: ${log.workerIdNo}]` : '';
+                    const vendorStr = log.vendorName && log.vendorName !== 'Direct / Unspecified' ? ` (${log.vendorName})` : '';
+                    const actionText = log.action === 'IN' ? 'IN' : `OUT (${log.durationStr || '—'})`;
+                    const radioTag = log.hasRadio ? (log.radioNumber ? ` [Radio #${log.radioNumber}]` : ' [Radio]') : '';
+                    lines.push(`• ${log.name}${idStr} [${badgeInfo.code}]${vendorStr}${radioTag} — ${actionText} at ${formatTimeShort(log.timestamp)}`);
+                });
+            }
+
+            return lines.join('\n');
+        }
+
+        // Check if Browser Supports Native File Sharing via Web Share API
+        function canShareCSVNatively() {
+            if (typeof navigator === 'undefined' || !navigator.share || !navigator.canShare) {
+                return false;
+            }
+            const { file } = buildCSVData();
+            if (!file) return false;
+            try {
+                return navigator.canShare({ files: [file] });
+            } catch (err) {
+                return false;
+            }
+        }
+
+        // Primary Entry Point for "Send to WhatsApp" Button
+        async function initiateWhatsAppShare() {
+            if (activityLogs.length === 0 && activeWorkers.length === 0) {
+                showToast('No attendance records available to send yet.', 'warning');
+                return;
+            }
+
+            const supportsNativeFileShare = canShareCSVNatively();
+
+            // Primary on Mobile & Tablet: Trigger Native Share Sheet with Actual .csv File
+            if (supportsNativeFileShare) {
+                const shared = await shareCSVViaNativeSheet();
+                if (shared) return;
+            }
+
+            // Fallback / Desktop / Direct Contact Option: Open WhatsApp Report Modal
+            openWhatsAppModal(supportsNativeFileShare);
+        }
+
+        // Share CSV File via Mobile/Tablet Native Share Sheet
+        async function shareCSVViaNativeSheet() {
+            const { file } = buildCSVData();
+            if (!file || !navigator.share) return false;
+
+            const summaryText = buildWhatsAppSummaryText();
+
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'SitePass Attendance Log',
+                    text: summaryText
+                });
+                showToast('Shared CSV report successfully!', 'success');
+                return true;
+            } catch (err) {
+                // If user cancelled the share sheet, open the modal so they still have direct WhatsApp options
+                if (err && err.name === 'AbortError') {
+                    openWhatsAppModal(true);
+                    return true;
+                }
+                console.warn('Native file share fallback:', err);
+                return false;
+            }
+        }
+
+        // Open WhatsApp Export & Direct Link Modal
+        function openWhatsAppModal(supportsNativeFileShare = canShareCSVNatively()) {
+            const { filename } = buildCSVData();
+            const nativeSection = document.getElementById('native-share-section');
+            const subtitleEl = document.getElementById('whatsapp-modal-subtitle');
+            const csvFilenameEl = document.getElementById('wa-csv-filename');
+
+            if (csvFilenameEl) csvFilenameEl.textContent = filename;
+
+            if (supportsNativeFileShare) {
+                nativeSection.classList.remove('hidden');
+                subtitleEl.textContent = 'Attach CSV file via Share Sheet or send directly to a WhatsApp number';
+            } else {
+                nativeSection.classList.add('hidden');
+                subtitleEl.textContent = 'CSV file downloaded — send the summary report directly to WhatsApp';
+                // Automatically download CSV on desktop/unsupported browsers so user has the file ready to attach
+                if (activityLogs.length > 0) {
+                    exportCSV(true);
+                    showToast(`Downloaded ${filename} to attach in WhatsApp`, 'info');
+                }
+            }
+
+            document.getElementById('wa-phone-input').value = savedWaPhone;
+            document.getElementById('wa-report-preview').value = buildWhatsAppSummaryText();
+
+            const modal = document.getElementById('whatsapp-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeWhatsAppModal() {
+            const modal = document.getElementById('whatsapp-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Save Recipient WhatsApp Number to localStorage
+        function saveWhatsAppPhone() {
+            const raw = document.getElementById('wa-phone-input').value || '';
+            savedWaPhone = raw.trim();
+            try {
+                localStorage.setItem(STORAGE_KEY_WA_PHONE, savedWaPhone);
+            } catch (err) {
+                console.error('Could not save WhatsApp number:', err);
+            }
+        }
+
+        // Copy WhatsApp Summary Report to Clipboard (iFrame-safe)
+        function copyWhatsAppReport() {
+            const textarea = document.getElementById('wa-report-preview');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+                showToast('Attendance report copied to clipboard!', 'success');
+            } catch (err) {
+                showToast('Could not copy automatically. Please select and copy text.', 'warning');
+            }
+        }
+
+        // Launch WhatsApp Direct Link (wa.me or api.whatsapp.com)
+        function launchWhatsAppDirect() {
+            const reportText = document.getElementById('wa-report-preview').value || buildWhatsAppSummaryText();
+            const encodedText = encodeURIComponent(reportText);
+            const cleanDigits = (document.getElementById('wa-phone-input').value || '').replace(/\D/g, '');
+
+            let waUrl = '';
+            if (cleanDigits.length >= 6) {
+                waUrl = `https://wa.me/${cleanDigits}?text=${encodedText}`;
+            } else {
+                waUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+            }
+
+            window.open(waUrl, '_blank', 'noopener,noreferrer');
+            showToast('Opening WhatsApp...', 'success');
+        }
+
+        // Location Modal Controls
+        function openLocationModal() {
+            document.getElementById('input-site-location').value = siteLocation;
+            document.getElementById('input-work-location').value = workLocation;
+            const modal = document.getElementById('location-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+            setTimeout(() => document.getElementById('input-site-location').focus(), 50);
+        }
+
+        function closeLocationModal() {
+            const modal = document.getElementById('location-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveLocations(event) {
+            if (event) event.preventDefault();
+            const siteInput = document.getElementById('input-site-location');
+            const workInput = document.getElementById('input-work-location');
+
+            siteLocation = siteInput ? siteInput.value.trim() : '';
+            workLocation = workInput ? workInput.value.trim() : '';
+
+            const persisted = saveToStorage();
+            renderAll();
+            closeLocationModal();
+
+            if (persisted) {
+                showToast('Locations saved!', 'success');
+            } else {
+                showToast('Locations updated for this session.', 'info');
+            }
+        }
+
+        // Log & Reset Modal Controls
+        function openLogModal() {
+            renderLogTable();
+            const modal = document.getElementById('log-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeLogModal() {
+            const modal = document.getElementById('log-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function openResetModal() {
+            const modal = document.getElementById('reset-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeResetModal() {
+            const modal = document.getElementById('reset-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // End-of-Shift Bulk Check-Out
+        function resetActiveOnly() {
+            if (activeWorkers.length === 0) {
+                closeResetModal();
+                showToast('Occupancy is already 0.', 'info');
+                return;
+            }
+
+            const nowISO = new Date().toISOString();
+            activeWorkers.forEach(worker => {
+                activityLogs.unshift({
+                    id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    name: worker.name,
+                    workerIdNo: worker.workerIdNo || '',
+                    vendorName: worker.vendorName || 'Direct / Unspecified',
+                    badgeType: normalizeBadgeType(worker.badgeType),
+                    action: 'OUT',
+                    timestamp: nowISO,
+                    durationStr: calculateDuration(worker.checkInTime, nowISO),
+                    siteLocation: siteLocation.trim() || worker.siteLocation || 'Unspecified Site',
+                    workLocation: workLocation.trim() || worker.workLocation || 'Unspecified Work Area',
+                    hasRadio: Boolean(worker.hasRadio),
+                    radioNumber: worker.hasRadio ? (worker.radioNumber || '') : ''
+                });
+            });
+
+            activeWorkers = [];
+            saveToStorage();
+            renderAll();
+            closeResetModal();
+            showToast('All remaining workers checked out.', 'success');
+        }
+
+        // Complete Wipe (Preserves configured Site & Work Location settings)
+        function resetEverything() {
+            activeWorkers = [];
+            activityLogs = [];
+            knownNames = [];
+            saveToStorage();
+            renderAll();
+            closeResetModal();
+            showToast('All attendance logs & occupancy cleared.', 'info');
+        }
+
+        // Clear Input Helper
+        function clearNameInput() {
+            const input = document.getElementById('worker-name-input');
+            input.value = '';
+            document.getElementById('clear-input-btn').classList.add('hidden');
+            input.focus();
+        }
+
+        // Custom Non-Blocking Toast Banner
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const styles = {
+                success: 'bg-emerald-600 text-white border-emerald-400',
+                warning: 'bg-amber-500 text-slate-950 border-amber-300',
+                error: 'bg-rose-600 text-white border-rose-400',
+                info: 'bg-slate-800 text-white border-slate-600'
+            };
+
+            toast.className = `${styles[type] || styles.info} border px-5 py-3.5 rounded-2xl shadow-2xl font-bold text-sm sm:text-base flex items-center gap-2.5 text-center whitespace-normal break-words fade-in`;
+            toast.textContent = message;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(8px)';
+                toast.style.transition = 'all 0.25s ease';
+                setTimeout(() => toast.remove(), 250);
+            }, 2600);
+        }
+
+        // Escape HTML to Prevent XSS
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Initialize Kiosk on Load
+        function initKiosk() {
+            loadFromStorage();
+            updateClock();
+            setInterval(updateClock, 1000);
+            renderAll();
+
+            const nameInput = document.getElementById('worker-name-input');
+            const clearBtn = document.getElementById('clear-input-btn');
+            if (nameInput && clearBtn) {
+                nameInput.addEventListener('input', () => {
+                    if (nameInput.value.trim().length > 0) {
+                        clearBtn.classList.remove('hidden');
+                    } else {
+                        clearBtn.classList.add('hidden');
+                    }
+                });
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initKiosk);
+        } else {
+            initKiosk();
+        }
+    </script>
+</body>
+</html>
